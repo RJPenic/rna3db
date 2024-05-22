@@ -6,6 +6,13 @@ from typing import Union
 PathLike = Union[str, os.PathLike]
 
 
+def read_struct_list(input_path: PathLike) -> list:
+    with open(input_path, "r") as f:
+        struct_ids = [line.rstrip() for line in f]
+
+    return struct_ids
+
+
 def read_json(input_path: PathLike) -> dict:
     """Read a JSON file to a Python dictionary.
 

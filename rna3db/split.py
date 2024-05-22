@@ -1,8 +1,8 @@
 import random
 
-from typing import Sequence
+from typing import Sequence, Optional
 
-from rna3db.utils import PathLike, read_json, write_json
+from rna3db.utils import PathLike, read_json, write_json, read_struct_list
 
 
 def find_optimal_components(lengths_dict, capacity):
@@ -20,12 +20,22 @@ def find_optimal_components(lengths_dict, capacity):
     return set(trace[capacity])
 
 
+def find_component_id(cluster_json: dict, struct_id: str):
+    for component_id in cluster_json:
+        for cluster_id in cluster_json[component_id]:
+            if struct_id in cluster_json[component_id][cluster_id]:
+                return component_id
+
+    return None
+
+
 def split(
     input_path: PathLike,
     output_path: PathLike,
     splits: Sequence[float] = [0.7, 0.0, 0.3],
     split_names: Sequence[str] = ["train_set", "valid_set", "test_set"],
     shuffle: bool = False,
+    forced_ids_last_path: Optional[PathLike] = None,
     force_zero_last: bool = False,
 ):
     """A function that splits a JSON of components into a train/test set.
@@ -61,7 +71,29 @@ def split(
         output[split_names[-1]]["component_0"] = cluster_json["component_0"]
         lengths.pop("component_0")
 
+    # Force given structures into last split (test)
+    if forced_ids_last_path is not None:
+        struct_ids = read_struct_list(forced_ids_last_path)
+
+        for struct_id in struct_ids:
+            component_id = find_component_id(cluster_json, struct_id)
+            if component_id not in output[split_names[-1]]:
+                output[split_names[-1]][component_id] = \
+                    cluster_json[component_id]
+                lengths.pop(component_id)
+
     capacities = [round(total_repr_clusters * ratio) for ratio in splits]
+
+    if split_names[-1] in output:
+        capacities[-1] = \
+            capacities[-1] - \
+            sum(
+                [
+                    len(output[split_names[-1]][component_id])
+                    for component_id in output[split_names[-1]]
+                ]
+            )  # Maybe not needed?
+
     for name, capacity in zip(split_names, capacities):
         components = find_optimal_components(lengths, capacity)
         for k in sorted(components):
