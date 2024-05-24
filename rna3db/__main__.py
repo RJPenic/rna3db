@@ -42,6 +42,7 @@ def filter(
     max_resolution: float = 9.0,
     single_ratio_cutoff: float = 0.8,
     max_unknown_ratio: float = 0.3,
+    remove_unfolded: bool = False
 ):
     data = read_json(input_path)
 
@@ -50,6 +51,7 @@ def filter(
         max_resolution=max_resolution,
         single_ratio_cutoff=single_ratio_cutoff,
         max_unknown_ratio=max_unknown_ratio,
+        remove_unfolded=remove_unfolded,
     )
 
     filtered_data = filterer.apply_filters(
@@ -112,6 +114,7 @@ def main(args):
             args.max_resolution,
             args.single_ratio_cutoff,
             args.max_unknown_ratio,
+            args.remove_unfolded,
         )
     elif args.command == "cluster":
         if not args.only_structure:
@@ -198,6 +201,9 @@ if __name__ == "__main__":
     )
     filter_parser.add_argument(
         "--min_length", type=int, default=32, help="Filter chains shorter than this"
+    )
+    filter_parser.add_argument(
+        "--remove_unfolded", action="store_true", default=False, help="Remove chains with no intra-chain interactions"
     )
     filter_parser.add_argument(
         "--filter_log_path",
