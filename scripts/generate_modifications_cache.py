@@ -6,7 +6,7 @@ import sys
 
 sys.path.append(".")  # an innocent hack to get this to run from the top level
 
-from Bio.Data import SCOPData
+from Bio.Data import PDBData
 
 VALID_RNA_CODES = set("ACGUT")
 
@@ -15,12 +15,12 @@ VALID_RNA_CODES = set("ACGUT")
 manual_fixes = {
     # SCOPData for a few protein cases to avoid inconsistency with AlphaFold
     **{
-        k: SCOPData.protein_letters_3to1.get(k, "X")
+        k: PDBData.protein_letters_3to1.get(k, "X")
         for k in ["0AZ", "DNM", "OTY", "TOX", "DNG", "PCA", "AEI", "PDU"]
     },
     # some selenocysteines are encoded incorrectly in SCOPData
     # we keep SCOPData's version for consistency with AlphaFold
-    **{k: SCOPData.protein_letters_3to1.get(k, "X") for k in ["PSW", "SOC", "SYS"]},
+    **{k: PDBData.protein_letters_3to1.get(k, "X") for k in ["PSW", "SOC", "SYS"]},
     # this is from Bio.Data.PDBData from an updated version of biopython, hardcoded to avoid
     # having to upgrade the whole package
     **{"F2Y": "Y", "QM8": "L", "PCA": "Q", "4BF": "F"},
