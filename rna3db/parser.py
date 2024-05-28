@@ -2,40 +2,11 @@ from typing import Sequence, Mapping, Tuple
 from collections import defaultdict
 from pathlib import Path
 from Bio import PDB
-import tempfile
-import subprocess
 
 from rna3db.utils import PathLike
 
 import dataclasses
 import json
-
-DSSR_EXECUTABLE_PATH = "<ADD PATH HERE>"
-
-
-def get_dssr_sec_structs(mmcif_path: PathLike):
-    sec_structs = {}
-
-    with tempfile.NamedTemporaryFile() as f_tmp:
-        # Run DSSR
-        subprocess.check_call(
-            [
-                DSSR_EXECUTABLE_PATH,
-                f"--input={str(mmcif_path)}",
-                f"--output={f_tmp.name}"
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT,
-        )
-
-        # Parse DSSR output
-        lines = f_tmp.readlines()
-        for idx, line in enumerate(lines):
-            if line.startswith(">") and "#" in line:
-                chain_id = line.split()[0].split("-")[-1]
-                sec_structs[chain_id] = lines[idx + 2]
-
-    return sec_structs
 
 
 def parse_as_dict(
@@ -65,11 +36,8 @@ def parse_as_dict(
         structure_file = StructureFile(
             path, modification_handler, molecule_type, nmr_resolution, include_atoms
         )
-        sec_structs = get_dssr_sec_structs(path)
-
         for chain in structure_file:
             chain_id = f"{structure_file.pdb_id}_{chain.author_id}"
-            sec_struct = sec_structs[chain.author_id][: len(chain.sequence)]
 
             d[chain_id] = {
                 "release_date": structure_file.release_date,
@@ -77,7 +45,6 @@ def parse_as_dict(
                 "resolution": structure_file.resolution,
                 "length": len(chain),
                 "sequence": chain.sequence,
-                "secondary_structure": sec_struct
             }
             if include_atoms:
                 d[chain_id]["atoms"] = [res.atoms for res in chain]

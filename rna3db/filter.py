@@ -11,7 +11,6 @@ class Filterer:
         max_resolution: float = 9.0,
         single_ratio_cutoff: float = 0.8,
         max_unknown_ratio: float = 0.3,
-        remove_unfolded: bool = False,
     ):
         self.min_length = min_length
         self.max_resolution = max_resolution
@@ -27,8 +26,6 @@ class Filterer:
             self.filters.append(self.is_singleratio_sequence)
         if self.max_unknown_ratio:
             self.filters.append(self.sequence_has_many_unknowns)
-        if remove_unfolded:
-            self.filters.append(self.is_unfolded)
 
     def is_low_resolution(self, d: dict):
         return d["resolution"] > self.max_resolution
@@ -46,34 +43,6 @@ class Filterer:
     def sequence_has_many_unknowns(self, d: dict):
         ratio = d["sequence"].count("N") / len(d["sequence"])
         return ratio > self.max_unknown_ratio
-
-    def is_unfolded(self, d: dict):
-        db_notation = d["secondary_structure"]
-
-        # Initialize bracket stacks
-        stacks = {}
-        stacks["("] = stacks[")"] = []
-        stacks["["] = stacks["]"] = []
-        stacks["{"] = stacks["}"] = []
-        stacks["<"] = stacks[">"] = []
-
-        for i, tkn in enumerate(db_notation):
-            if tkn in ("(", "[", "{", "<"):
-                stacks[tkn].append(i)
-            elif tkn in (")", "]", "}", ">"):
-                if len(stacks[tkn]) > 0:
-                    return False
-            elif db_notation[i] == ".":
-                pass
-            else:
-                raise RuntimeError(
-                    f"""
-                        Encountered unexpected symbol in dot-bracket
-                        notation string! (Index: {i}, Symbol: {tkn})
-                    """
-                )
-
-        return True
 
     def apply_filters(self, data: dict, json_filter_log_path: PathLike = None):
         logging.info(f"Applying filters {[f.__name__ for f in self.filters]}")
