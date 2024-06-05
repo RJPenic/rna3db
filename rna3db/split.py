@@ -84,16 +84,6 @@ def split(
 
     capacities = [round(total_repr_clusters * ratio) for ratio in splits]
 
-    if split_names[-1] in output:
-        capacities[-1] = \
-            capacities[-1] - \
-            sum(
-                [
-                    len(output[split_names[-1]][component_id])
-                    for component_id in output[split_names[-1]]
-                ]
-            )  # Maybe not needed?
-
     for name, capacity in zip(split_names, capacities):
         components = find_optimal_components(lengths, capacity)
         for k in sorted(components):

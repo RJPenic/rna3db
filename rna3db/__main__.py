@@ -141,6 +141,7 @@ def main(args):
                 1 - args.train_ratio - args.valid_ratio,
             ],
             force_zero_last=args.force_zero_test,
+            forced_ids_last_path=args.forced_ids_test,
         )
     else:
         raise ValueError
@@ -270,6 +271,11 @@ if __name__ == "__main__":
         "--force_zero_test",
         action="store_true",
         help="Force component zero into the test set",
+    )
+    split_parser.add_argument(
+        "--forced_ids_test",
+        type=Path,
+        help="List of structure IDs that should be in test set"
     )
 
     args = parser.parse_args()
