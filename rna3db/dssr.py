@@ -8,7 +8,7 @@ from rna3db.utils import PathLike, read_json, write_json
 DSSR_EXECUTABLE_PATH = "<ADD PATH HERE>"
 
 
-def get_sec_structs_w_dssr(mmcif_path: PathLike) -> dict:
+def run_dssr(mmcif_path: PathLike) -> dict:
     sec_structs = {}
 
     with tempfile.NamedTemporaryFile() as f_tmp:
@@ -28,7 +28,15 @@ def get_sec_structs_w_dssr(mmcif_path: PathLike) -> dict:
         for idx, line in enumerate(lines):
             if line.startswith(">") and "#" in line:
                 chain_id = line.split()[0].split("-")[-1]
-                sec_structs[chain_id] = lines[idx + 2]
+                seq = lines[idx + 1]
+                ss = lines[idx + 2]
+
+                # Remove ligand pairings
+                while seq[-2] == "&" and seq[-1].islower():
+                    seq = seq[:-2]
+                    ss = ss[:-2]
+
+                sec_structs[chain_id] = ss
 
     return sec_structs
 
@@ -49,7 +57,7 @@ def dssr(
 
                 if entry_id not in ss_cache:
                     ss_cache[entry_id] = \
-                        get_sec_structs_w_dssr(mmcif_dir / f"{entry_id}.cif")
+                        run_dssr(mmcif_dir / f"{entry_id}.cif")
 
                 if chain_id not in ss_cache[entry_id]:
                     ss_cache[entry_id][chain_id] = ""
