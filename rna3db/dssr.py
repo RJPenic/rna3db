@@ -1,68 +1,110 @@
-import tempfile
 import subprocess
 from pathlib import Path
-import tqdm
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 from rna3db.utils import PathLike, read_json, write_json
 
-DSSR_EXECUTABLE_PATH = "<ADD PATH HERE>"
+DSSR_EXECUTABLE_PATH = "<ADD DSSR EXECUTABLE HERE>"
+MAX_DSSR_TRIES = 3
 
 
-def run_dssr(mmcif_path: PathLike) -> dict:
+def run_dssr(cif_file: PathLike, out_file: PathLike) -> None:
+    if Path(out_file).exists():
+        return
+
+    for _ in range(MAX_DSSR_TRIES):
+        try:
+            subprocess.check_call(
+                [
+                    DSSR_EXECUTABLE_PATH,
+                    f"--input={str(cif_file)}",
+                    f"--output={str(out_file)}"
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+            )
+            return
+        except Exception:
+            continue
+
+
+def parse_dssr_output(dssr_out_file: PathLike) -> dict[str, str]:
     sec_structs = {}
 
-    with tempfile.NamedTemporaryFile() as f_tmp:
-        # Run DSSR
-        subprocess.check_call(
-            [
-                DSSR_EXECUTABLE_PATH,
-                f"--input={str(mmcif_path)}",
-                f"--output={f_tmp.name}"
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT,
-        )
+    with open(dssr_out_file, "r") as f:
+        lines = f.readlines()
 
-        # Parse DSSR output
-        lines = f_tmp.readlines()
-        for idx, line in enumerate(lines):
-            if line.startswith(">") and "#" in line:
-                chain_id = line.split()[0].split("-")[-1]
-                seq = lines[idx + 1]
-                ss = lines[idx + 2]
+    for idx, line in enumerate(lines):
+        if line.startswith(">") and "#" in line:
+            chain_id = line.split()[0].split("-")[-1]
+            seq = lines[idx + 1].rstrip()
+            ss = lines[idx + 2].rstrip()
 
-                # Remove ligand pairings
-                while seq[-2] == "&" and seq[-1].islower():
-                    seq = seq[:-2]
-                    ss = ss[:-2]
+            if len(seq) < 2:
+                continue
 
-                sec_structs[chain_id] = ss
+            # Remove ligand pairings
+            while seq[-2] == "&" and seq[-1].islower():
+                seq = seq[:-2]
+                ss = ss[:-2]
+
+            sec_structs[chain_id] = ss
 
     return sec_structs
 
 
-def dssr(
-    input_path: PathLike,
-    output_path: PathLike,
-    mmcif_dir: PathLike
-) -> None:
-    data_json = read_json(input_path)
-    mmcif_dir = Path(mmcif_dir)
-    ss_cache = {}
+def collect_pdb_ids(data_json: dict) -> set[str]:
+    pdb_ids = set()
 
-    for component_id in tqdm(data_json):
+    for component_id in data_json:
         for cluster_id in data_json[component_id]:
             for struct_id in data_json[component_id][cluster_id]:
-                entry_id, chain_id = struct_id.split("_")
+                pdb_id = struct_id.split("_")[0]
+                pdb_ids.add(pdb_id)
 
-                if entry_id not in ss_cache:
-                    ss_cache[entry_id] = \
-                        run_dssr(mmcif_dir / f"{entry_id}.cif")
+    return pdb_ids
 
-                if chain_id not in ss_cache[entry_id]:
-                    ss_cache[entry_id][chain_id] = ""
 
-                data_json[component_id][cluster_id][struct_id]["ss"] = \
-                    ss_cache[entry_id][chain_id]
+def calculate_ss(
+    input_path: PathLike,
+    output_path: PathLike,
+    cif_dir: PathLike,
+    dssr_out_dir: PathLike,
+    num_workers: int = 1
+) -> None:
+    data_json = read_json(input_path)
+
+    cif_dir = Path(cif_dir)
+    dssr_out_dir = Path(dssr_out_dir)
+
+    dssr_out_dir.mkdir(parents=True, exist_ok=True)
+    
+    pdb_ids = list(collect_pdb_ids(data_json))
+
+    with ThreadPoolExecutor(max_workers=num_workers) as ex:
+        _ = list(
+                tqdm(
+                    ex.map(
+                        run_dssr,
+                        [cif_dir / f"{pdb_id}.cif" for pdb_id in pdb_ids],
+                        [dssr_out_dir / f"{pdb_id}.dssr" for pdb_id in pdb_ids],
+                    ), total=len(pdb_ids)
+            )
+        )
+
+    for component_id in data_json:
+        for cluster_id in data_json[component_id]:
+            for struct_id in data_json[component_id][cluster_id]:
+                pdb_id, chain_id = struct_id.split("_")
+
+                data_json[component_id][cluster_id][struct_id]["ss"] = ""
+
+                dssr_out = parse_dssr_output(dssr_out_dir / f"{pdb_id}.dssr")
+                data_json[component_id][cluster_id][struct_id]["ss"] = ""
+
+                if chain_id in dssr_out:
+                    data_json[component_id][cluster_id][struct_id]["ss"] = \
+                        dssr_out[chain_id]
 
     write_json(data_json, output_path)
