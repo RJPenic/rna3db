@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 
 from rna3db.utils import PathLike, read_json, write_json
 
@@ -79,10 +79,10 @@ def calculate_ss(
     dssr_out_dir = Path(dssr_out_dir)
 
     dssr_out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     pdb_ids = list(collect_pdb_ids(data_json))
 
-    with ThreadPoolExecutor(max_workers=num_workers) as ex:
+    with ProcessPoolExecutor(max_workers=num_workers) as ex:
         _ = list(
                 tqdm(
                     ex.map(
@@ -90,7 +90,7 @@ def calculate_ss(
                         [cif_dir / f"{pdb_id}.cif" for pdb_id in pdb_ids],
                         [dssr_out_dir / f"{pdb_id}.dssr" for pdb_id in pdb_ids],
                     ), total=len(pdb_ids)
-            )
+                )
         )
 
     for component_id in data_json:
